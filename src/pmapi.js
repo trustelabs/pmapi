@@ -1,27 +1,34 @@
 window.PrivacyManagerAPI = (function() {
 
+	//external object, containing exposed functions
 	var me = {};
+	
 	//the singleton object, the API itself
 	var inner = {
-		"defaults" : arguments[0],
-    	"binfo" : arguments[1]
+		"defaults" : arguments[0],  //defaults can be passed in on API creation
+    	"binfo" : arguments[1]  //depreciated
 	};
+	
+	//for cases where the API is loaded as a module, not via script element.
 	if(this!=window) this.inner = inner;
 	
-	/**
+	/*
 	 * This is the main container for everything in the API. 
 	 * Preferences, defaults, API information. all that.
+	 * Defaults passed by "init" are sent here.
 	 * 
 	 * capabilities - the list of available API calls
 	 * consent - map which contains all preferences.
 	 * domain - the domain this API applies to, if not exact host match.
-	 * 			ex: host == "sub.domain.com" but API applies to "domain.com", so set domain = "domain.com"
+	 * 			ex: host == "sub.domain.com" but API applies to "domain.com", set domain = "domain.com"
 	 */
 	inner.fake = {
 		capabilities : [ "getConsent" ],
 		default_consent : "denied",
 		default_source : "implied",
-        /**
+        /* 
+         * ALL SECURITY IN API IS RETROACTIVE: Innocent till proven guilty.
+         * Therefore logs are needed to determine usage and abuse.
          * REPORT LEVELS BIT-MASK:
          * 1  : Dont report all first-party calls (sync calls)
          * 2  : Dont report all third party calls (iframe post messages)
@@ -40,12 +47,15 @@ window.PrivacyManagerAPI = (function() {
 				type : {}
 			}
 		},
-		domain : ""
+		domain : window.location.hostname
 	};
 	//Callback container, for auto-responses on API change.
 	inner.requestors = {};
+	//List of authorization granters. Some calls require an entity on this list to
+	//authorize a party to make. The site owner is automatically treated as an authorizer.
 	inner.authorities = [ ".truste.com" ];
-	inner.blacklist = [".example-xxx.com"]; //list of domains not allowed to use the API
+	//list of domains not allowed to use the API
+	inner.blacklist = [".example-xxx.com"];
 	/*
      * HOW THIS WORKS::
      * 		TYPES::
@@ -520,6 +530,7 @@ window.PrivacyManagerAPI = (function() {
     inner._imgrep = [];//so the img isn't garbage collected
     inner.sendEvent = function(action, authr, type, asker, info, domain){
     	if(this.caddy && this.caddy.hold) return;
+    	if(window.location.protocol != "http:" || this.tconsole.isDebug()) return;
     	if(info==null) info = {"page":window.location.pathname};
     	
     	var mydomain = window.location.hostname, 
@@ -543,8 +554,9 @@ window.PrivacyManagerAPI = (function() {
     me.callApi = function(){
         try{
         	inner.caddy = null;
-        	return inner.apiDo.apply({},arguments);
-        }catch(e){ 
+        	return inner.apiDo.apply(inner,arguments);
+        }catch(e){  
+        	inner.tconsole.log(e.stack);
         	return {error:"Unknown Error occured"}; 
         }
     };
@@ -560,22 +572,22 @@ window.PrivacyManagerAPI = (function() {
         var rob = {PrivacyManagerAPI:{error:"An unknown error occurred: "+e.toString()}};
         this.sendPost(event,rob);
         if(window.console){ console.log(e.stack); } else throw e;
-	};
+	};	/**
+	 * Debug output printer
+	 * Checks for debug flag on API object and existence of a "console".
+	 */
 	inner.tconsole = {
-		isDebug : window.location.hostname.indexOf(".") < 0
-				|| PrivacyManagerAPI.debug,
+		isDebug : function(){
+			return PrivacyManagerAPI.debug || window.location.hostname.indexOf(".") < 0;
+		},
 		log : function(msg) {
-			if (this.isDebug && window.console) {
-				console.log(msg);
-				return true;
-			}
-			return false;
+			this.isDebug() && window.console && window.console.log(msg);
 		}
 	};
 	/**
 	 * Gets an object from a JSON string;
 	 * Uses JSON if the browser has it;
-	 * Else uses safe eval
+	 * Else uses safe eval I found on the internet: //TODO find link
 	 * 
 	 * @param text JSON string
 	 * @returns object from the JSON
@@ -592,20 +604,25 @@ window.PrivacyManagerAPI = (function() {
     /**
      * Getter/Setter
      * 
-     * Getter (value==null)
+     * Getter [value==null] ('undefined' will pass)
      *   Looks in localStorage first. 
      *   If !null && !"", then parses the JSON and returns;
      *   Looks in the cookiejar.
      *   If !null && !"", then parses the JSON;
-     *   If localStorage exists, writes the value to localStorage (for case where subdomain has changed) and returns
+     *   If localStorage exists,
+     *   	writes the value to localStorage (for case where subdomain has changed) and returns
      *   returns null
      *   
-     * Setter (value != null)
+     * Setter [value != null]
      *   stringifies if ! string
      *   If value == "", deletes entry from localStorage
      *   Else writes the string to LS
      *   If value == "", expires cookie from cookiejar
      *   Else writes the string to a cookie expiring ~a year from now
+     *   
+     * @param name The Key for lookup
+     * @param value [optional] determines whether getter or setter; behavior above.
+     * @returns Object from storage or NULL if not found;
      */
 	inner.getStorage = function(name, value) {
 		try {
@@ -662,7 +679,7 @@ window.PrivacyManagerAPI = (function() {
 	};
 
     /**
-     * Convenience PostMessage sending function
+     * Convenience PostMessage sending utility function
      * 
      * @param e the received postMessage object containing the "source" and "origin"
      * @param rob the data to be sent, Object or String
@@ -682,9 +699,11 @@ window.PrivacyManagerAPI = (function() {
 	};
 	
 	/**
+	 * Internal Use
+	 * 
      * Applies default settings of the site.
      * User settings override site default settings if ever there is a conflict, which
-     * means that this CAN NEVER run after loadOldPrefs()
+     * means that this CAN NEVER run after loadOldPrefs() - which is why the _hasLoadedPrefs variable exists.
      * 
      * @param _fake the default preferences object hard coded into the API
      * @param defaults the "default" parameter passed into the function which creates the API.
@@ -708,12 +727,15 @@ window.PrivacyManagerAPI = (function() {
 		}
 	};
 	/**
-	 * PostMessage listener
+	 * PostMessage listener. This is the entry for third party calls. It does basic
+	 * validation checking for a correctly name-spaced object.
 	 * 
 	 * Checks to see if the message is for the API.
 	 * Checks to see if the message is (mostly) valid.
-	 * Sometimes messages are sent from the API to the same frame as the API, so this listener must
-	 * know to ignore messages sent from within the API.
+	 * Sometimes messages are sent from the API to the same frame as the API, 
+	 * so this listener must know to ignore messages from itself.
+	 * 
+	 * @param e The message even from the browser
 	 */
 	inner.messageListener = function(e) {
 		var ob, dob = e.data && inner.getJSON(e.data);
@@ -741,7 +763,15 @@ window.PrivacyManagerAPI = (function() {
 			inner.handleMessageError(error,e);
 		}
 	};
-	
+	/**
+	 * External Use
+	 * 
+	 * Applies defaults to the API. These defaults will be used when the user has no settings for
+	 * queried domains or types. Generally this is used by domain owners (first parties).
+	 * 
+	 * @param defaults Object which contains key-value pairs to be applied as the defaults of the API.
+	 * @param finalizeIt boolean which instructs the API to finalize (no longer accept new defaults).
+	 */
 	me.init = function(defaults,finalizeIt){
 		inner.init(defaults,null,finalizeIt);
 	};

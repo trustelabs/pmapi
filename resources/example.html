@@ -1,0 +1,36 @@
+<html>
+<head>
+</head>
+<body>
+<span>Query permission for domain: </span><input type="text" id="queryDomain"></input><br>
+<span>Query permission for cookie type: </span><input type="text" id="queryType"></input><br>
+<span>Query permission using authorizer: </span><input type="text" id="queryAuth"></input><br>
+<button onclick="doQueryAPI();">do query api</button>
+<p>
+<div>
+<span>current consent: </span><span id="apiResultConsent" style="color:blue;"></span><br>
+<span>current source: </span><span id="apiResultSource" style="color:purple;"></span><br>
+<br><span>Raw Result:</span><br>
+<span id="apiResultRaw"></span>
+</div>
+</p>
+
+
+<script src = "../src/pmapi.js"></script>
+<script src = "../src/helper.js"></script>
+<script>
+PrivacyManagerAPI.debug = true;
+function gotAPIResult(result){
+	document.getElementById("apiResultSource").innerText = result.source;
+	document.getElementById("apiResultConsent").innerText = result.consent;
+	document.getElementById("apiResultRaw").innerText = JSON.stringify(result);
+}
+function doQueryAPI(){
+	var domain = document.getElementById("queryDomain").value;
+	var type   = document.getElementById("queryType").value || null;
+	var auth   = document.getElementById("queryAuth").value || null;
+	callPMAPI(gotAPIResult,domain,type,auth);
+}
+</script>
+</body>
+</html>
