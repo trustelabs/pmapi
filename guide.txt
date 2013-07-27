@@ -1,0 +1,3 @@
+The `/resources/example.html` shows a quick example of how the API can be used and set up from both the PM API implementor's, web site owner's, and API caller's POV.
+
+The `/src/helper.js` is for API callers to use (as an example, at least) to communicate with the API.
