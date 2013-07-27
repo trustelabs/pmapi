@@ -62,8 +62,8 @@ window.PrivacyManagerAPI = (function() {
      * 			A type is an integer;
      * 			A type can also have a "label" or "name", which is enumerated below;
      * 			A type is comprised of 4 bits * 4; //IOW 4 hex digits
-     * 			Each 4bit (hex) value represents a "level" or "score" or "answer";
-     * 			To the question represented by that value's bit's location;
+     * 			Each 4bit (hex) value represents a "level" or "score" or "answer", whatever you want to call it,
+     * 			to the question represented by that value's bit's location;
      * 			Questions represented:
      * 				Bits    Question
      * 				1-4		When
@@ -77,13 +77,15 @@ window.PrivacyManagerAPI = (function() {
      * 				0x7		3
      * 				0xf		4
      * 			You'll notice that the bits look like this (0001,0011,0111,1111);
-     * 			That's because this is a bit mask. Each bit represents an answer, and each
-     * 			set of 4 represents a question. This fills out the 4x4 matrix of possible Types;
-     * 			Each "higher" level is a superset of lower "levels". For example, b1000 implies b1111;
-     * 			Therefore "denying" b1000 implies denying b0111 and b0011 and b0001 BUT
-     * 			BUT BUT BUT
-     * 			For the sake of sanity, this API does not enforce that. b1000 is not a valid Type level
-     * 			And this API, when encountering that invalid type, does not specify a behavior.
+     * 			That's because this is a bit mask. Each bit represents an 'answer', and each
+     * 			set of 4 represents a 'question'. This fills out the 4x4 matrix of possible Types;
+     * 			Each "higher" level is a superset of lower "levels"; ex. "denying" 0xF implies denying 0x7,0x3 and 0x1;
+     * 			
+     * 			This is done on a "bit by bit" basis (XOR). For example, b1000 will imply b1111, and
+     * 			therefore "denying" b1000 implies denying b0111 and b0011 and b0001 - -
+     * 			BUT BUT BUT BUT
+     * 			For the sake of sanity, this API does not enforce what I just said: b1000 is not a valid Type level value
+     * 			and this API, when encountering that invalid type, does not specify a behavior.
      */
     inner.valid_values = { 
     	consent:{"denied":1,"approved":2}, 
@@ -356,10 +358,10 @@ window.PrivacyManagerAPI = (function() {
     inner.updatePreferences = function(domain,value,types,fakeOb){
     	if(!domain) return false;
     	domain.charAt(0)!='.' && (domain='.'+domain);
-    	if(this.valid_values.consent[value]){
+    	if(value || types){
             var g = this.getConsentForDomain(domain,fakeOb) || {type:{}};
-            g.value = value;
-            for(var s in types){
+            if(this.valid_values.consent[value]) g.value = value;
+            if(types) for(var s in types){
             	if(this.valid_values.consent[types[s]]){
 	            	if(isNaN(s)){
 	            		if(this.valid_values.type[s]) g.type[s] = types[s];
@@ -470,7 +472,7 @@ window.PrivacyManagerAPI = (function() {
                     }
                     forDomain.charAt(0)!='.' && (forDomain='.'+forDomain);
                     var newValue = apiOb.value;
-                    var forTypes = apiOb.types;
+                    var forTypes = apiOb.type;
                     
                     /////WRITE NEW VALUES//////
                     if(!this.updatePreferences(forDomain,newValue,forTypes,this.fake)) return {error: "Invalid value for required parameter 'value' sent"};
@@ -775,7 +777,7 @@ window.PrivacyManagerAPI = (function() {
 	me.init = function(defaults,finalizeIt){
 		inner.init(defaults,null,finalizeIt);
 	};
-	window["TRUSTE_CMAPI_DEBUG"] = inner;	
+	window["PREF_MGR_API_DEBUG"] = inner;	
 	if (window.postMessage) {
 		if (window.top.addEventListener) {
 			window.top.addEventListener("message", inner.messageListener, false);

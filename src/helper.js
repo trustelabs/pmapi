@@ -6,11 +6,12 @@ var callPMAPI = (function(myDomain, myAuthority){
 			if(typeof myob == "string"){
 				myob = JSON.parse(myob);
 			}
-			if(myob.PrivacyManagerAPI){
-				//This is a message from the PM API 
+			if(myob.PrivacyManagerAPI && myob.PrivacyManagerAPI.capabilities){
+				//This is a message from the PM API.
 				myob = myob.PrivacyManagerAPI;
 				var callback = callbacks[myob.callbackKey];
-				callback(myob);
+				if(callback) callback(myob);
+				//else not mine
 			}
 		}
 	};
@@ -21,10 +22,10 @@ var callPMAPI = (function(myDomain, myAuthority){
 			window.attachEvent("onmessage", my_api_listener);
 		}
 	}
-	return function callPMAPI(callback, forDomain, cookieTypes, usingAuthority, action){
+	return function callPMAPI(callback, forDomain, cookieTypes, usingAuthority, action, others){
 		if(!action) action = "getConsent";
 		if(!usingAuthority) usingAuthority = myAuthority;
-		if(window.PrivacyManagerAPI){
+		if(window.PrivacyManagerAPI && !others){
 			//make direct call
 			callback( window.PrivacyManagerAPI.callApi(action, myDomain, forDomain, usingAuthority, cookieTypes) );
 		}else if(window.postMessage) {
@@ -38,6 +39,7 @@ var callPMAPI = (function(myDomain, myAuthority){
 					timestamp : new Date().getTime()
 			};
 			myob.callbackKey = myob.timestamp + myob.domain;
+			for(var g in others) myob[g] = others[g];
 			callbacks[myob.callbackKey] = callback;
 			myob = {"PrivacyManagerAPI":myob};
 			window.top.postMessage( JSON.stringify(myob) , "*");

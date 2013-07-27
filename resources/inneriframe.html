@@ -2,10 +2,10 @@
 <head>
 </head>
 <body>
-<script src="../src/pmapi.js"></script>
+<!--script src="../src/pmapi.js"></script-->
 <script src = "../src/helper.js"></script>
 <script>
-PrivacyManagerAPI.debug = true;
+if(window.PrivacyManagerAPI) PrivacyManagerAPI.debug = true;
 function gotAPIResult(result){
 	document.getElementById("apiResultSource").innerText = result.source;
 	document.getElementById("apiResultConsent").innerText = result.consent;

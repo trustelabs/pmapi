@@ -2,24 +2,49 @@
 <head>
 </head>
 <body>
+<table>
+<tr>
+<td style="padding-left:50px;">MAKE SETTINGS<br>
+<div style="border: 10px outset #56c19f; height:300px">
+<span>set permission for domain: </span><input type="text" id="setDomain"></input><br>
+<span>set permission for cookie type: </span><input type="text" id="setType"></input><br>
+<span>TO VALUE (denied or approved): </span><input type="text" id="setValue"></input><br>
+<br><button onclick="doAPISetting();">apply setting to api for this domain</button><br><br>
+<button onclick="doAPIRevert();">remove all settings for this domain</button>
+<br><br>
+</div>
+</td>
+<td style="padding-left:50px;">TOP FRAME QUERY<br>
+<div style="border: 10px outset #9821bf; height:300px; width:450px;">
 <span>Query permission for domain: </span><input type="text" id="queryDomain"></input><br>
 <span>Query permission for cookie type: </span><input type="text" id="queryType"></input><br>
 <span>Query permission using authorizer: </span><input type="text" id="queryAuth"></input><br>
-<button onclick="doQueryAPI();">do query api</button>
-<p>
+<br><button onclick="doQueryAPI();">do query api</button>
+<br><br>
 <div>
 <span>current consent: </span><span id="apiResultConsent" style="color:blue;"></span><br>
 <span>current source: </span><span id="apiResultSource" style="color:purple;"></span><br>
 <br><span>Raw Result:</span><br>
 <span id="apiResultRaw"></span>
-</div>
-</p>
+</div></div>
+</td>
+<td style="padding-left:50px;">IFRAME QUERY<br>
+<iframe src="inneriframe.html" style="width:500px;height:300px; border: 10px outset #98bf21;"></iframe>
+</td>
+</tr>
+</table>
+
 
 
 <script src = "../src/pmapi.js"></script>
 <script src = "../src/helper.js"></script>
 <script>
+
+//ADD ability to make preference changes. Used for debugging and examples - like this one.
+PREF_MGR_API_DEBUG.authorities.push(window.location.hostname);
 PrivacyManagerAPI.debug = true;
+
+
 function gotAPIResult(result){
 	document.getElementById("apiResultSource").innerText = result.source;
 	document.getElementById("apiResultConsent").innerText = result.consent;
@@ -30,6 +55,31 @@ function doQueryAPI(){
 	var type   = document.getElementById("queryType").value || null;
 	var auth   = document.getElementById("queryAuth").value || null;
 	callPMAPI(gotAPIResult,domain,type,auth);
+}
+function doAPISetting(){
+	var domain = document.getElementById("setDomain").value;
+	var type   = document.getElementById("setType").value || null;
+	var val   = document.getElementById("setValue").value || null;
+	if(!domain || (val!="approved" && val!="denied")){
+		return alert("invalid value");
+	}
+	if(type){
+		var t = type.split(" ");
+		if(t.length==1) t = type.split(",");
+		type = {};
+		for(var i = 0; i < t.length; i++){
+			type[t[i]] = val;
+		}
+		val = null;
+	}
+	callPMAPI(gotAPIResult,domain,type,null,"updatePreference",{"value":val});
+}
+function doAPIRevert(){
+	var domain = document.getElementById("setDomain").value;
+	if(!domain){
+		return alert("invalid value");
+	}
+	callPMAPI(gotAPIResult,domain,type,null,"updatePreference",{"value":null});
 }
 </script>
 </body>
