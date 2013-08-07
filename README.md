@@ -55,8 +55,8 @@ Gets the user's cookie consent for the domain passed. This preference has two le
 - _source_ - the source of the current permission. see below for values.
 
 ##### example synchronous calls: 
-- `PrivacyManager.callApi("getConsent", "my.domain.com", "www.myexample.com");`
-- `PrivacyManager.callApi("getConsent","my.domain.com", "www.myexample.com","authority.com", "session");`
+- `PrivacyManagerAPI.callApi("getConsent", "my.domain.com", "www.myexample.com");`
+- `PrivacyManagerAPI.callApi("getConsent","my.domain.com", "www.myexample.com","authority.com", "session");`
 
 ##### example object returned:
 - `{source: "implied", consent: "denied"}`
