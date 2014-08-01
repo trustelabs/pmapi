@@ -4,9 +4,10 @@ window.PrivacyManagerAPI = (function() {
 	var me = {};
 	
 	//the singleton object, the API itself
+	var args = Array.prototype.slice.call(arguments);
 	var inner = {
-		"defaults" : arguments[0],  //defaults can be passed in on API creation
-    	"binfo" : arguments[1]  //depreciated
+		"defaults" : args[0],  //defaults can be passed in on API creation
+    	"binfo" : args[1]  //depreciated
 	};
 	
 	//for cases where the API is loaded as a module, not via script element.
@@ -50,7 +51,7 @@ window.PrivacyManagerAPI = (function() {
 		domain : window.location.hostname
 	};
 	//Callback container, for auto-responses on API change.
-	inner.requestors = {};
+	inner.requestors = {"loading":[]};
 	//List of authorization granters. Some calls require an entity on this list to
 	//authorize a party to make. The site owner is automatically treated as an authorizer.
 	inner.authorities = [ ".truste.com" ];
@@ -132,36 +133,6 @@ window.PrivacyManagerAPI = (function() {
     inner.endsWith = function(b,a){
     	return (a!=null&&a.replace)?new RegExp('.*'+a.replace(/\./g,"\\.")+'$').test(b):false;
     };
-    
-	/**
-     * Simple JSON stringifier, in the case that the browser doesn't have JSON. 
-     * Uses JSON.stringify if does.
-     * 
-     * @param ob the object to JSON.stringify
-     * @returns String of the object
-     */
-    inner.cheapJSON = function(ob){ //everyone love IE
-    	if(window.JSON&&JSON.stringify) return JSON.stringify(ob);
-    	if(ob instanceof Array){
-			var s = "[";
-			if(ob.length){
-				s += this.cheapJSON(ob[0]);
-				for(var i=1;i<ob.length;i++) s += ","+ this.cheapJSON(ob[i]);
-			}
-			return s+"]";
-		}else if(typeof ob=="string"){
-			return "\""+ob+"\"";
-		}else if((ob) instanceof Object){
-			var comma = false, s = "{";
-	    	for(var g in ob){
-				s += (comma?",":"")+"\""+g+"\":" + this.cheapJSON(ob[g]);
-				comma = true;
-			}
-	    	return s+"}";
-		}else return ob+"";
-    };
-    
-
 
 	/**
 	 * Applies old preferences which were stored in a previous run of this API on this domain.
@@ -411,7 +382,9 @@ window.PrivacyManagerAPI = (function() {
                 }
                 //the idea is that the second argument is a string if it needs to be reported as a 'declared' authority
                 this.sendEvent(action, authr?authr:auth , type, asker, this.caddy, domain);
-                return result ? {source:"asserted",consent:result} : {"source":this.fake.default_source,"consent":this.fake.default_consent};
+                it = result ? {source:"asserted",consent:result} : {"source":this.fake.default_source,"consent":this.fake.default_consent};
+                if(authr>0) it.origin = window.location.hostname;
+                return it;
             default: return this.secondaryAction(action, asker,arguments[2]);
         }
     };
@@ -580,10 +553,10 @@ window.PrivacyManagerAPI = (function() {
 	 */
 	inner.tconsole = {
 		isDebug : function(){
-			return PrivacyManagerAPI.debug || window.location.hostname.indexOf(".") < 0;
+			return (window.PrivacyManagerAPI||me).debug || window.location.hostname.indexOf(".") < 0;
 		},
 		log : function(msg) {
-			this.isDebug() && window.console && window.console.log(msg);
+			inner.tconsole.isDebug() && window.console && window.console.log(msg);
 		}
 	};
 	/**
@@ -594,14 +567,21 @@ window.PrivacyManagerAPI = (function() {
 	 * @param text JSON string
 	 * @returns object from the JSON
 	 */
-	inner.getJSON = function(text) {
-		if(typeof text == "object") return text;
+	inner.parseJSON = function(text) {
+		if(typeof text != "string") return text;
 		try {
 			return window.JSON ? JSON.parse(text)
 					: (!(/[^,:{}\[\]0-9.\-+Eaeflnr-u \n\r\t]/.test(text.replace(/"(\\.|[^"\\])*"/g, ''))) && eval('(' + text + ')'));
 		} catch (e) {}
 		return null;
 	};
+	
+	//tries to find a JSON parser
+	inner.cheapJSON = function(o) {
+		return window.JSON ? JSON.stringify(o)
+				: (truste.util&&truste.util.fromJSON ? truste.util.getJSON(o) : "{\"PrivacyManagerAPI\":{\"message\":\"The API needs a JSON parser\"}}");
+	};
+	
 	
     /**
      * Getter/Setter
@@ -639,7 +619,7 @@ window.PrivacyManagerAPI = (function() {
 						value = window.localStorage[name]
 								|| window.localStorage.getItem(name);
 						if (value)
-							return (this.getJSON(value) || value);
+							return (this.parseJSON(value) || value);
 						value = null;
 					} else {
 						if (value) {
@@ -664,7 +644,7 @@ window.PrivacyManagerAPI = (function() {
 							this.tconsole.log("said was localstorage but wasn't: " + e.stack);
 						}
 					}
-					return (this.getJSON(value) || value);
+					return (this.parseJSON(value) || value);
 				}
 			} else {
 				var d = this.fake.domain || null;
@@ -716,7 +696,7 @@ window.PrivacyManagerAPI = (function() {
 		_fake = _fake || this.fake;
 		try {
 			if (defaults && typeof defaults == "string") {
-				defaults = this.getJSON(defaults);
+				defaults = this.parseJSON(defaults);
 			}
 			if (defaults) {
 				for ( var s in _fake) {
@@ -740,7 +720,7 @@ window.PrivacyManagerAPI = (function() {
 	 * @param e The message even from the browser
 	 */
 	inner.messageListener = function(e) {
-		var ob, dob = e.data && inner.getJSON(e.data);
+		var ob, dob = e.data && inner.parseJSON(e.data);
 		if (!dob || !(ob = dob.PrivacyManagerAPI || inner.handleCMMessage(dob) ))
 			return; 
 		if (ob.capabilities || ob.error) {

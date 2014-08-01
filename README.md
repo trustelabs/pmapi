@@ -38,6 +38,7 @@ All calls to the API are made through this function : `PrivacyManagerAPI.callApi
 All messages to the API must be JSON strings consisting of a root object with a property/field named "PrivacyManagerAPI", which references an object, referred to as the "api object". All api objects must have these properties:
 - "timestamp" - the `new Date().getTime()` the message is sent
 - "action" - the name of the api call
+- "self" - who you are: your domain or a domain by which you wish to be identified.
 All API call parameters will be added onto this api object. This object will be returned from the API, not the exact object but a copy of it, so any non-API properties added to this object (ex. a UID, or callbackID) will be retained. 
 
 ## Current Calls
@@ -62,11 +63,11 @@ Gets the user's cookie consent for the domain passed. This preference has two le
 - `{source: "implied", consent: "denied"}`
 
 ##### example api objects for post message calls: 
-- `{timestamp:new Date().getTime(), action:"getConsent"}`
-- `{timestamp:new Date().getTime(), action:"getConsent", domain:"otherdomain.com", authority:"authority.com", type:"session"}`
+- `{timestamp:new Date().getTime(), action:"getConsent", self:"my.domain.com"}`
+- `{timestamp:new Date().getTime(), action:"getConsent", self:"my.domain.com", domain:"otherdomain.com", authority:"authority.com", type:"session"}`
 
 ##### example API object response to post message call: 
-- `{capabilites:["getConsent"], source:"implied", consent:"denied", action:"getConsent", timestamp:1234567890}`
+- `{capabilites:["getConsent"], source:"implied", consent:"denied", action:"getConsent", timestamp:1234567890, self:"my.domain.com"}`
 
 
 ####  
@@ -82,7 +83,7 @@ Updates the user's cookie consent value for the domain passed. This call is ONLY
 
 ##### example api object:
 ```javascript
-{timestamp:new Date().getTime(), action:"updatePreference", domain:"www.example.com", value:"denied", type:{session:"approved",personal:"approved"}}
+{timestamp:new Date().getTime(), action:"updatePreference", domain:"www.example.com", value:"denied", type:{session:"approved",personal:"approved"}, self:"my.domain.com"}
 ```
 
 
