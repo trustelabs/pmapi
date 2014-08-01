@@ -1,0 +1,216 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+<head>
+    <link rel="stylesheet" href="https://dl.dropboxusercontent.com/u/70541702/TRUSTe/GTM/style.css" type="text/css">
+    <script>
+        //This is your domain, as in, how you who are calling the API wish to be identified.
+        var MY_DOMAIN = ".my-domain.com";
+        /**
+         * If you are asking about a specific cookie, this is the domain or parent domain of the cookie.
+         * But this parameter is technically not limited to cookies, and you may ask for permission for any domain in
+         * general (ex. "doubleclick.com" even though "doubleclick.com" might not necessarily drop a cookie on the page).
+         * If you have multiple domains you want to ask permission for, you will have to ask for and handle each separately.
+         *
+         * @type {String}
+         */
+        var THE_TRACKER_DOMAIN = "getting.consent.for.this-domain.com";
+        var REQUIRE_USER_EXPRESSED_PERMISSION = true; //France
+
+        var _STATE = {};
+
+        /**
+         * Different pages add the Consent Manager in different locations, so all callers of the API must wait till
+         * the API is loaded. The API is loaded in two stages:
+         *      1) The first stage is where the "PrivacyManagerAPI" object exists on the page and where default and
+         *         page/domain specific settings can be obtained. If your requirements demand user consent, you must wait
+         *         for the second stage load, but it is always recommended to wait for the second stage no matter what.
+         *         The "loading" parameter will be added to all API responses when the API is in this state.
+         *      2) The second stage loads the user preferences and the domain specific information. If you made a
+         *         postMessage API call during the first stage, then the API will automatically send you another, updated,
+         *         response if the result has changed.
+         */
+        function runOnce(){
+            //CHECK: for API exists on the page
+            if(!_STATE.hasRunOnce && window.PrivacyManagerAPI){
+                console.log("doing run once");
+
+                //Register with the API for automatic updates of user preferences (for the settings you care about)
+                //--OR-- if the API is loading, then this will send an update when the API is done and has loaded the user preferences.
+                window.addEventListener("message", function(e){
+                    try{
+                        var json = JSON.parse(e.data);
+                        json.PrivacyManagerAPI && handleAPIResponse(json.PrivacyManagerAPI);
+                    }catch(e){}
+                }, false);
+                var apiObject = {PrivacyManagerAPI: { self: MY_DOMAIN, action: "getConsent" , timestamp: new Date().getTime(), type: "functional" }};
+                window.top.postMessage(JSON.stringify(apiObject),"*");
+                apiObject = {PrivacyManagerAPI: { self: MY_DOMAIN, action: "getConsent" , timestamp: new Date().getTime(), type: "advertising" }};
+                window.top.postMessage(JSON.stringify(apiObject),"*");
+
+                //Get the preference NOW for immediate action (if necessary).
+                handleAPIResponse( window.PrivacyManagerAPI.callApi("getConsent", MY_DOMAIN , THE_TRACKER_DOMAIN) );
+
+                _STATE.hasRunOnce = true;
+                _STATE.i && clearInterval(_STATE.i);
+            }
+        }
+        /**
+         * This function is called whenever a user preference is initially set, is retrieved for the first time on this page, or is updated.
+         * This is the gateway function which should be customized by each client (you) to determine when and how to handle the API response.
+         *
+         * The second half of the function determines settings from the CM API, and decides which elements on the page should be "activated" based upon those settings.
+         * Elements can only be activated once. Elements can not be deactivated, once activated.
+         */
+        function handleAPIResponse(response){
+            //CHECK: make sure this response is to YOU. You will actually get the messages to all API callers on this page, not just to you.
+            if(!response.source || response.self != MY_DOMAIN ) return;
+            console.log("user decision",response);
+
+            //Case where we don't want to do anything till the user has made a preference.
+            if( REQUIRE_USER_EXPRESSED_PERMISSION && response.source != "asserted" ) return;
+
+            //Step 1) Get Consent Manager settings (user prefs) for THE_TRACKER_DOMAIN
+            //        These API calls are DIFFERENT than the original API call ("response" parameter) so they must be called separately.
+            //Step 2) Apply the settings after checking if approved
+            var setting = null;
+            if( !_STATE.hasLoadedAdvertising ){
+                setting = PrivacyManagerAPI.callApi("getConsent", MY_DOMAIN , THE_TRACKER_DOMAIN ,null, "advertising");
+                if( setting.consent=="approved" ){
+                    activateElement(document.querySelectorAll(".trustecm[trackertype=advertising]"));
+                    _STATE.hasLoadedAdvertising = true;
+                }console.log(setting);
+            }
+            if( !_STATE.hasLoadedFunctional ){
+                setting = PrivacyManagerAPI.callApi("getConsent", MY_DOMAIN , THE_TRACKER_DOMAIN ,null, "functional");
+                if( setting.consent=="approved" ){
+                    activateElement(document.querySelectorAll(".trustecm[trackertype=functional]"));
+                    _STATE.hasLoadedFunctional = true;
+                }console.log(setting);
+            }
+
+            //Required trackers/cookies are always allowed, no need to ask permission.
+            if( !_STATE.hasLoadedRequired ){
+                activateElement(document.querySelectorAll(".trustecm[trackertype=required]"));
+                _STATE.hasLoadedRequired = true;
+            }
+        }
+        /**
+         * Activates (runs, loads, or displays) an element based upon element node name.
+         * @param {Array.<HTMLElement>} list
+         */
+        function activateElement(list){
+            if(!(list instanceof Array || list instanceof NodeList)) throw "Illegal argument - must be an array";
+            console.log("activating", list);
+            for(var item,i=list.length;i-- >0;){
+                item = list[i];
+                item.class = "trustecm_done";
+                switch(item.nodeName.toLowerCase()){
+                    case "script":
+                        var z = item.getAttribute("thesrc");
+                        if(z){
+                            var y = document.createElement("script");
+                            y.src = z;
+                            y.async = item.async;
+                            item.parentNode.insertBefore(y,z);
+                        }else eval(item.text || item.textContent || item.innerText);
+                }
+            }
+        }
+        _STATE.i = setInterval(runOnce,10);
+    </script>
+</head>
+
+<body>
+<div class="outerwrapper">
+    <header>
+        <h1>TRUSTe Consent Manager API Demo - A Privacy Manager API implementation</h1>
+    </header>
+
+
+    <!-- *********************** REQUIRED TAG *********************** -->
+    <div class="wrapper" id="required"></div>
+    <!-- *********************** END REQUIRED TAG***********************  -->
+
+
+    <div class="wrapper" style="padding-bottom:75px;">
+        <div style="float:left; display:inline-block;">
+
+
+            <!-- *********************** ADVERTISING TAG***********************  -->
+            <div id="advertising" style="display:inline-block;"></div>
+            <!-- *********************** END ADVERTISING TAG *********************** -->
+
+
+            <br />
+        </div>
+
+        <div style=" ">
+            <p text-align=left>Lorem ipsum dolor sit amet. consectetur adipiscing elit.
+                <br>Ut nec lacus quam. Sed ornare, augue eget aliquet vehicula, purus libero elementum neque, vel hendrerit eros lacus non leo.</p>
+
+            <p text-align=left>Lorem ipsum dolor sit amet. consectetur adipiscing elit.
+                <br>Ut nec lacus quam. Sed ornare, augue eget aliquet vehicula, purus libero elementum neque, vel hendrerit eros lacus non leo.</p>
+
+            <p text-align=left>Lorem ipsum dolor sit amet. consectetur adipiscing elit.
+                <br>Ut nec lacus quam. Sed ornare, augue eget aliquet vehicula, purus libero elementum neque, vel hendrerit eros lacus non leo.</p>
+        </div>
+    </div>
+    <div class="wrapper">
+        <div>
+            <div class="fb-like" data-send="true" data-width="450" data-show-faces="true"></div>
+
+            <!-- *********************** FUNCTIONAL TAG *********************** -->
+            <div id="functional" class="taglabelnotice"></div>
+            <!-- *********************** END FUNCTIONAL TAG *********************** -->
+
+        </div>
+    </div>
+
+    <footer style="padding-top: 8px; border-top: 1px solid #f0f0f0;">
+        <div class="wrapper" style="text-align:right;">
+
+
+            <!-- *********************** CONSENT TAG *********************** -->
+            <div id=teconsent></div>
+            <!-- *********************** END CONSENT TAG *********************** -->
+
+
+        </div>
+    </footer>
+</div>
+<div class="overlay"></div>
+<script>
+    var d = document.getElementById("teconsent");
+    var e = document.createElement("script");
+    e.type = "text/javascript";
+    e.src = "//consent-st.truste.com/get?name=notice.js&domain=consentmanagerdemo.com&c=teconsent&country=gb";
+    d.appendChild(e);
+</script>
+<script class="trustecm" trackertype="advertising" type="text/plain">
+    document.getElementById("advertising").innerHTML = '<iframe src="//choices.truste.com/get?name=300x250.png" width="300" height="250"> </iframe><br /><span class="taglabelnotice">Advertising custom tag loaded</span>';
+</script>
+<script class="trustecm" trackertype="functional" type="text/plain">
+    window.fbAsyncInit = function() {
+    FB.init({
+    appId      : '163171347061440',
+    xfbml      : true,
+    version    : 'v2.0'
+    });
+    };
+
+    (function(d, s, id){
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) {return;}
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/sdk.js";
+    fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+    document.getElementById("functional").innerHTML = '<span>Functional custom tag loaded</span>';
+</script>
+<script class="trustecm" trackertype="required" type="text/plain">
+    document.getElementById("required").innerHTML = '<br /><div><b>TRUSTe Consent Manager API Integration Demo</b></div><div><span class="taglabelnotice">Required custom tag loaded</span></div><br />';
+</script>
+<script class="trustecm" trackertype="required" thesrc="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+</body>
+
+</html>

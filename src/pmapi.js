@@ -154,10 +154,10 @@ window.PrivacyManagerAPI = (function() {
     	}
     	this._hasLoadedPrefs = true;
     	///////resend requests made while loading
-    	var i=0,n = (inner.requestors.loading && inner.requestors.loading.length) || 0;
+    	var i=0,n = (this.requestors.loading && this.requestors.loading.length) || 0;
     	while(i<n){
-    		var l = inner.requestors.loading[i++];
-			inner.processMessage(l.apiOb, l);
+    		var l = this.requestors.loading[i++];
+    		this.processMessage(l.apiOb, l);
 		}
     };
     
@@ -262,9 +262,9 @@ window.PrivacyManagerAPI = (function() {
     /**
      * Converts the "type" string (or array of strings) to a single integer value
      * 
-     * @param type String or String[] or CSV String (technically, and non-word character separated list)
-     * @returns integer Integer type equivalent to the initial "type" parameter
-    */
+     * @param {(String|Array.<String>)} type String or String[] or CSV String (technically, and non-word character separated list)
+     * @returns {Number} Integer type equivalent to the initial "type" parameter
+     */
     inner.getBType = function(type){
     	var resp = 0xFFFF;
     	if(type){
@@ -293,10 +293,9 @@ window.PrivacyManagerAPI = (function() {
      * Goes through the typeOb, and at each type, check is the current "type" is a subset of any of them.
      * The Keys, if you recall, can be CSV, so you can have {"site security required":"approved"} as your typeOb
      * 
-     * @param typeOb Object key-value map. Key is type name (or integer) and value is a valid consent value
-     * @param type Integer or String type, or array of integers and string types. This represents the type
-     * 			from the current query.
-     * @return String a Consent Value
+     * @param {Object} typeOb Object key-value map. Key is type name (or integer) and value is a valid consent value
+     * @param {(Integer|String|Array.<String>|Array.<Integer>)} type This represents the type from the current query.
+     * @return {String} a Consent Value
      */
     inner.getTypePermission = function(typeOb, type){
     	if(!type||isNaN(type)||type.length) type = this.getBType(type);
@@ -306,7 +305,8 @@ window.PrivacyManagerAPI = (function() {
     		for(var key in typeOb){
 	    		if(typeOb[key] && this.valid_values.consent[typeOb[key]]){
 	    			resp.temp = this.getBType(key);
-	    			if((resp.temp | type) == resp.temp ){
+	    			if( (resp.temp | type) == resp.temp && typeOb[key]=="approved" ||
+	    			    ((resp.temp | type) != resp.temp || resp.temp==type) && typeOb[key]=="denied"){
 	    				if(!resp[typeOb[key]]) resp.push(typeOb[key]);
 	    				resp[typeOb[key]] = key;
 	    			}
@@ -321,10 +321,10 @@ window.PrivacyManagerAPI = (function() {
      * Takes new preferences for a domain and sets them on the API preferences object.
      * Also stores them in localStorage.
      * 
-     * @param domain String The domain of the preference
-     * @param value String Consent Value to be used as the "domain"s default value
-     * @param types Object {"some type":"some consent value",...} Type preferences
-     * @param fakeOb Object The API's preferences object
+     * @param {String} domain The domain of the preference
+     * @param {String} value Consent Value to be used as the "domain"s default value
+     * @param {Object} types {"some type":"some consent value",...} Type preferences
+     * @param {Object} fakeOb The API's preferences object
      */
     inner.updatePreferences = function(domain,value,types,fakeOb){
     	if(!domain) return false;
@@ -358,6 +358,8 @@ window.PrivacyManagerAPI = (function() {
     /**
      * MAIN API CALL
      * This is the one that actually does everything
+     * @param {String} action api call id
+     * @param {String} asker identifier of the entity calling the api
      */
     inner.apiDo = function(action, asker){
         if(!action || !asker || !this.isCapable(action)) return {error:"Call is missing required parameters or not allowed"};
@@ -468,8 +470,8 @@ window.PrivacyManagerAPI = (function() {
 	 * Does not consider defaults, this is "domain" only.
 	 * 
 	 * 
-	 * @param domain the domain for the preference you're looking for
-	 * @param fakeOb The API preferences object
+	 * @param {String} domain the domain for the preference you're looking for
+	 * @param {Object} fakeOb The API preferences object
 	 * 
 	 * @returns Object {value:"some consent value",type:{"some type":"some consent value"}};
 	 */
@@ -479,7 +481,7 @@ window.PrivacyManagerAPI = (function() {
     	return temp;
     };
     //placeholder
-    inner.handleCMMessage = function(ob){ 
+    inner.secondaryMessageProcessing = inner.secondaryAction = inner.handleCMMessage = function(ob){ 
     	return null; 
     };
 
@@ -564,7 +566,7 @@ window.PrivacyManagerAPI = (function() {
 	 * Uses JSON if the browser has it;
 	 * Else uses safe eval I found on the internet: //TODO find link
 	 * 
-	 * @param text JSON string
+	 * @param {String} text JSON string
 	 * @returns object from the JSON
 	 */
 	inner.parseJSON = function(text) {
@@ -576,14 +578,17 @@ window.PrivacyManagerAPI = (function() {
 		return null;
 	};
 	
-	//tries to find a JSON parser
+	/**
+     * tries to find a JSON parser
+     * @param {Object} o to be stringified
+     */
 	inner.cheapJSON = function(o) {
-		return window.JSON ? JSON.stringify(o)
-				: (truste.util&&truste.util.fromJSON ? truste.util.getJSON(o) : "{\"PrivacyManagerAPI\":{\"message\":\"The API needs a JSON parser\"}}");
+		return window.truste && truste.util && truste.util.getJSON(o) || 
+			window.JSON && JSON.stringify(o) || "{\"PrivacyManagerAPI\":{\"message\":\"The API needs a JSON parser\"}}";
 	};
 	
 	
-    /**
+	/**
      * Getter/Setter
      * 
      * Getter [value==null] ('undefined' will pass)
@@ -602,7 +607,7 @@ window.PrivacyManagerAPI = (function() {
      *   If value == "", expires cookie from cookiejar
      *   Else writes the string to a cookie expiring ~a year from now
      *   
-     * @param name The Key for lookup
+     * @param {String} name The Key for lookup
      * @param value [optional] determines whether getter or setter; behavior above.
      * @returns Object from storage or NULL if not found;
      */
@@ -660,11 +665,11 @@ window.PrivacyManagerAPI = (function() {
 		return null;
 	};
 
-    /**
+	/**
      * Convenience PostMessage sending utility function
      * 
-     * @param e the received postMessage object containing the "source" and "origin"
-     * @param rob the data to be sent, Object or String
+     * @param {{data,origin,domain,source:Window}} e the received postMessage object containing the "source" and "origin"
+     * @param {(String|Object)} rob the data to be sent, Object or String
      */
 	inner.sendPost = function(e, rob) {
 		if (!window.postMessage || !e || !e.source || !rob)
@@ -686,10 +691,11 @@ window.PrivacyManagerAPI = (function() {
      * Applies default settings of the site.
      * User settings override site default settings if ever there is a conflict, which
      * means that this CAN NEVER run after loadOldPrefs() - which is why the _hasLoadedPrefs variable exists.
-     * 
-     * @param _fake the default preferences object hard coded into the API
-     * @param defaults the "default" parameter passed into the function which creates the API.
+     *
+     * @param {(String|Object)} defaults the "default" parameter passed into the function which creates the API.
      * 			  This is actually the default parameters as customized by the site owner in their Portal bindings.
+     * @param {Object=} _fake the default preferences object hard coded into the API
+     * @param {boolean=} loadOldPrefs should call the loadOldPrefs function after done
      */
 	inner.init = function(defaults, _fake, loadOldPrefs) {
     	if(this._hasLoadedPrefs) return;
@@ -717,7 +723,7 @@ window.PrivacyManagerAPI = (function() {
 	 * Sometimes messages are sent from the API to the same frame as the API, 
 	 * so this listener must know to ignore messages from itself.
 	 * 
-	 * @param e The message even from the browser
+	 * @param {{data,origin,domain,source}} e The message even from the browser
 	 */
 	inner.messageListener = function(e) {
 		var ob, dob = e.data && inner.parseJSON(e.data);
@@ -751,8 +757,8 @@ window.PrivacyManagerAPI = (function() {
 	 * Applies defaults to the API. These defaults will be used when the user has no settings for
 	 * queried domains or types. Generally this is used by domain owners (first parties).
 	 * 
-	 * @param defaults Object which contains key-value pairs to be applied as the defaults of the API.
-	 * @param finalizeIt boolean which instructs the API to finalize (no longer accept new defaults).
+	 * @param {Object} defaults contains key-value pairs to be applied as the defaults of the API.
+	 * @param {boolean} finalizeIt instructs the API to finalize (no longer accept new defaults).
 	 */
 	me.init = function(defaults,finalizeIt){
 		inner.init(defaults,null,finalizeIt);
